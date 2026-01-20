@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Countdown</title>
+  <style>
+    :root{
+      --bg1:#0b1020;
+      --bg2:#0f1b3a;
+      --card:rgba(255,255,255,.08);
+      --card2:rgba(255,255,255,.12);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.68);
+      --accent:#7c5cff;
+      --accent2:#27e8a7;
+      --danger:#ff3d71;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --radius: 22px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 20% 10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 700px at 80% 30%, rgba(39,232,167,.25), transparent 55%),
+        linear-gradient(160deg, var(--bg1), var(--bg2));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+    }
+
+    .wrap{
+      width:min(980px, 100%);
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:18px;
+    }
+
+    .card{
+      background:linear-gradient(180deg, var(--card), rgba(255,255,255,.05));
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:22px;
+      backdrop-filter: blur(10px);
+    }
+
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+
+    h1{
+      font-size: clamp(20px, 3vw, 28px);
+      margin:0 0 6px 0;
+      letter-spacing:.2px;
+    }
+    .sub{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.4;
+    }
+
+    .clock{
+      font-family: var(--mono);
+      font-size: clamp(46px, 7vw, 84px);
+      letter-spacing: 1.5px;
+      display:flex;
+      align-items:baseline;
+      justify-content:center;
+      padding:18px 14px;
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.05));
+      border:1px solid rgba(255,255,255,.12);
+      margin-top:16px;
+      user-select:none;
+    }
+    .clock small{
+      font-family:var(--sans);
+      font-size:14px;
+      color:var(--muted);
+      margin-left:12px;
+      letter-spacing:0;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:12px;
+      margin-top:14px;
+    }
+
+    .field{
+      grid-column: span 12;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    label{
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    input, select, button{
+      font: inherit;
+      color: var(--text);
+    }
+
+    input, select{
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 14px;
+      padding: 12px 12px;
+      outline: none;
+      transition: border .15s ease, transform .15s ease, background .15s ease;
+    }
+    input:focus, select:focus{
+      border-color: rgba(124,92,255,.75);
+      background: rgba(0,0,0,.32);
+    }
+
+    input[type="number"]{
+      width: 110px;
+    }
+
+    .btns{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    button{
+      border:1px solid rgba(255,255,255,.18);
+      background: linear-gradient(180deg, rgba(124,92,255,.85), rgba(124,92,255,.55));
+      padding:12px 14px;
+      border-radius: 14px;
+      cursor:pointer;
+      box-shadow: 0 10px 22px rgba(124,92,255,.18);
+      transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+      font-weight: 650;
+      letter-spacing:.2px;
+    }
+    button:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+    button:active{ transform: translateY(0px); filter: brightness(.98); }
+
+    button.secondary{
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+      box-shadow:none;
+      font-weight:600;
+    }
+
+    button.danger{
+      background: linear-gradient(180deg, rgba(255,61,113,.85), rgba(255,61,113,.55));
+      box-shadow: 0 10px 22px rgba(255,61,113,.16);
+    }
+
+    .meta{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      justify-content:space-between;
+      margin-top:10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .pill{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+    }
+
+    .flash{
+      animation: flash 0.6s steps(2, end) infinite;
+      border-color: rgba(255,61,113,.8) !important;
+      box-shadow: 0 0 0 3px rgba(255,61,113,.18), var(--shadow);
+    }
+    @keyframes flash{
+      0%{ opacity:1; }
+      50%{ opacity:.15; }
+      100%{ opacity:1; }
+    }
+
+    .hint{
+      margin-top:12px;
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+
+    @media (min-width: 780px){
+      .field.time { grid-column: span 8; }
+      .field.actions { grid-column: span 4; }
+      .btns{ justify-content:flex-start; height:100%; align-content:flex-end; }
+      .clock{ margin-top:18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <header>
+        <div>
+          <h1>Countdown</h1>
+          <p class="sub">Set a local target time (12-hour). If it’s already passed today, it’ll count down to tomorrow.</p>
+        </div>
+        <div class="pill" id="nowPill">Now: --:--:--</div>
+      </header>
+
+      <div class="clock" id="display">00:00:00 <small id="status">Ready</small></div>
+
+      <div class="grid">
+        <div class="field time">
+          <label>Target time</label>
+          <div class="row">
+            <input id="hour" type="number" min="1" max="12" inputmode="numeric" placeholder="HH" value="12" />
+            <input id="minute" type="number" min="0" max="59" inputmode="numeric" placeholder="MM" value="00" />
+            <select id="ampm">
+              <option>AM</option>
+              <option selected>PM</option>
+            </select>
+            <button class="secondary" id="setToNextHour" type="button">Set to next hour</button>
+          </div>
+        </div>
+
+        <div class="field actions">
+          <label>Actions</label>
+          <div class="btns">
+            <button id="start" type="button">Start</button>
+            <button class="secondary" id="pause" type="button">Pause</button>
+            <button class="danger" id="reset" type="button">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="pill" id="targetPill">Target: —</div>
+        <div class="pill" id="modePill">Mode: Not running</div>
+      </div>
+
+      <p class="hint">
+        Tip: Hit <b>Start</b> again after changing the time to restart the countdown. Uses your device’s local clock.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+
+    const hourInput = el("hour");
+    const minuteInput = el("minute");
+    const ampmSelect = el("ampm");
+
+    const startBtn = el("start");
+    const pauseBtn = el("pause");
+    const resetBtn = el("reset");
+    const setToNextHourBtn = el("setToNextHour");
+
+    const display = el("display");
+    const status = el("status");
+    const nowPill = el("nowPill");
+    const targetPill = el("targetPill");
+    const modePill = el("modePill");
+
+    let timerId = null;
+    let targetDate = null;
+    let paused = false;
+    let remainingWhenPausedMs = null;
+
+    // --- Helpers ---
+    const pad2 = (n) => String(n).padStart(2, "0");
+
+    function formatHMS(ms) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+    }
+
+    function setDisplay(text, flash=false) {
+      // Keep the "small" status node stable by rewriting only the text nodes:
+      display.childNodes[0].nodeValue = text + " ";
+      display.classList.toggle("flash", flash);
+    }
+
+    function to24Hour(hour12, ampm) {
+      let h = hour12 % 12;        // 12 -> 0
+      if (ampm === "PM") h += 12;
+      return h;
+    }
+
+    function sanitizeInputs() {
+      let hh = Number(hourInput.value);
+      let mm = Number(minuteInput.value);
+
+      if (!Number.isFinite(hh)) hh = 12;
+      if (!Number.isFinite(mm)) mm = 0;
+
+      hh = Math.min(12, Math.max(1, Math.trunc(hh)));
+      mm = Math.min(59, Math.max(0, Math.trunc(mm)));
+
+      hourInput.value = hh;
+      minuteInput.value = pad2(mm);
+
+      return { hh, mm, ampm: ampmSelect.value };
+    }
+
+    function computeNextTargetDate() {
+      const { hh, mm, ampm } = sanitizeInputs();
+
+      const now = new Date();
+      const target = new Date(now);
+
+      const hour24 = to24Hour(hh, ampm);
+      target.setHours(hour24, mm, 0, 0);
+
+      // If target is <= now, set to tomorrow
+      if (target.getTime() <= now.getTime()) {
+        target.setDate(target.getDate() + 1);
+      }
+
+      return target;
+    }
+
+    function prettyTime(d) {
+      // local 12-hour with seconds
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    function prettyTarget(d) {
+      // local with weekday + date + time (short)
+      return d.toLocaleString([], {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    // --- Live "Now" pill ---
+    setInterval(() => {
+      nowPill.textContent = "Now: " + prettyTime(new Date());
+    }, 250);
+
+    // --- Core countdown loop ---
+    function tick() {
+      if (!targetDate) return;
+
+      const now = new Date();
+      const diff = targetDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setDisplay("00:00:00", true);
+        status.textContent = "Time!";
+        modePill.textContent = "Mode: Finished";
+        stopTimer(false); // don't reset target, just stop ticking
+        return;
+      }
+
+      setDisplay(formatHMS(diff), false);
+      status.textContent = "Counting down";
+      modePill.textContent = "Mode: Running";
+    }
+
+    function startTimer() {
+      // If paused, resume using remaining time
+      if (paused && remainingWhenPausedMs != null) {
+        targetDate = new Date(Date.now() + remainingWhenPausedMs);
+        paused = false;
+        remainingWhenPausedMs = null;
+      } else {
+        targetDate = computeNextTargetDate();
+      }
+
+      targetPill.textContent = "Target: " + prettyTarget(targetDate);
+      display.classList.remove("flash");
+
+      stopTimer(false);
+      tick();
+      timerId = setInterval(tick, 200); // tight-ish loop; display updates to seconds
+    }
+
+    function stopTimer(resetModeText=true) {
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+      if (resetModeText) modePill.textContent = "Mode: Not running";
+    }
+
+    function pauseTimer() {
+      if (!timerId || !targetDate) return;
+
+      const diff = targetDate.getTime() - Date.now();
+      remainingWhenPausedMs = Math.max(0, diff);
+      paused = true;
+
+      stopTimer(false);
+      status.textContent = "Paused";
+      modePill.textContent = "Mode: Paused";
+      setDisplay(formatHMS(remainingWhenPausedMs), false);
+    }
+
+    function resetAll() {
+      stopTimer(true);
+      targetDate = null;
+      paused = false;
+      remainingWhenPausedMs = null;
+
+      display.classList.remove("flash");
+      setDisplay("00:00:00", false);
+      status.textContent = "Ready";
+      targetPill.textContent = "Target: —";
+    }
+
+    // --- UI wiring ---
+    startBtn.addEventListener("click", startTimer);
+    pauseBtn.addEventListener("click", pauseTimer);
+    resetBtn.addEventListener("click", resetAll);
+
+    setToNextHourBtn.addEventListener("click", () => {
+      const now = new Date();
+      // Next hour, minute 00
+      const next = new Date(now);
+      next.setHours(now.getHours() + 1, 0, 0, 0);
+
+      // Convert to 12h
+      const h24 = next.getHours();
+      const ampm = h24 >= 12 ? "PM" : "AM";
+      const h12 = (h24 % 12) || 12;
+
+      hourInput.value = h12;
+      minuteInput.value = "00";
+      ampmSelect.value = ampm;
+
+      // If running, restart countdown to the new target immediately
+      if (timerId || paused) {
+        paused = false;
+        remainingWhenPausedMs = null;
+        startTimer();
+      }
+    });
+
+    // Make Enter start the timer when editing fields
+    [hourInput, minuteInput, ampmSelect].forEach((node) => {
+      node.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") startTimer();
+      });
+    });
+
+    // Initialize
+    resetAll();
+    nowPill.textContent = "Now: " + prettyTime(new Date());
+  </script>
+</body>
+</html>
