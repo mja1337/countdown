@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Countdown</title>
+  <title>Meeting Countdown</title>
   <style>
     :root{
       --bg1:#0b1020;
@@ -86,6 +86,8 @@
       border:1px solid rgba(255,255,255,.12);
       margin-top:16px;
       user-select:none;
+      text-align:center;
+      line-height:1.05;
     }
     .clock small{
       font-family:var(--sans);
@@ -93,6 +95,8 @@
       color:var(--muted);
       margin-left:12px;
       letter-spacing:0;
+      display:inline-block;
+      vertical-align:baseline;
     }
 
     .grid{
@@ -118,28 +122,26 @@
       display:flex;
       gap:10px;
       flex-wrap:wrap;
+      align-items:center;
     }
 
-    input, select, button{
+    input, button{
       font: inherit;
       color: var(--text);
     }
 
-    input, select{
+    input{
       background: rgba(0,0,0,.25);
       border: 1px solid rgba(255,255,255,.16);
       border-radius: 14px;
       padding: 12px 12px;
       outline: none;
       transition: border .15s ease, transform .15s ease, background .15s ease;
+      min-width: 260px;
     }
-    input:focus, select:focus{
+    input:focus{
       border-color: rgba(124,92,255,.75);
       background: rgba(0,0,0,.32);
-    }
-
-    input[type="number"]{
-      width: 110px;
     }
 
     .btns{
@@ -209,6 +211,17 @@
       line-height:1.5;
     }
 
+    .warn{
+      color: rgba(255,255,255,.85);
+      background: rgba(255,61,113,.12);
+      border: 1px solid rgba(255,61,113,.25);
+      padding: 10px 12px;
+      border-radius: 14px;
+      margin-top: 12px;
+      display:none;
+    }
+    .warn.show{ display:block; }
+
     @media (min-width: 780px){
       .field.time { grid-column: span 8; }
       .field.actions { grid-column: span 4; }
@@ -222,8 +235,10 @@
     <section class="card">
       <header>
         <div>
-          <h1>Countdown</h1>
-          <p class="sub">Set a local target time (12-hour). If it’s already passed today, it’ll count down to tomorrow.</p>
+          <h1>Meeting Countdown</h1>
+          <p class="sub">
+            Set a meeting start + end (local time). The page counts down to the end, and suggests a 5-minute break at halfway.
+          </p>
         </div>
         <div class="pill" id="nowPill">Now: --:--:--</div>
       </header>
@@ -232,15 +247,11 @@
 
       <div class="grid">
         <div class="field time">
-          <label>Target time</label>
+          <label>Meeting times</label>
           <div class="row">
-            <input id="hour" type="number" min="1" max="12" inputmode="numeric" placeholder="HH" value="12" />
-            <input id="minute" type="number" min="0" max="59" inputmode="numeric" placeholder="MM" value="00" />
-            <select id="ampm">
-              <option>AM</option>
-              <option selected>PM</option>
-            </select>
-            <button class="secondary" id="setToNextHour" type="button">Set to next hour</button>
+            <input id="startAt" type="datetime-local" />
+            <input id="endAt" type="datetime-local" />
+            <button class="secondary" id="setDefaults" type="button">Now + 30m</button>
           </div>
         </div>
 
@@ -254,13 +265,17 @@
         </div>
       </div>
 
+      <div class="warn" id="warn"></div>
+
       <div class="meta">
-        <div class="pill" id="targetPill">Target: —</div>
+        <div class="pill" id="meetingPill">Meeting: —</div>
+        <div class="pill" id="breakPill">Break: —</div>
         <div class="pill" id="modePill">Mode: Not running</div>
       </div>
 
       <p class="hint">
-        Tip: Hit <b>Start</b> again after changing the time to restart the countdown. Uses your device’s local clock.
+        Notes: Break is scheduled at the halfway point (50% of total meeting length) and lasts 5 minutes.
+        If the meeting hasn’t started yet, the big timer counts down to the start. Once started, it counts down to the end.
       </p>
     </section>
   </main>
@@ -268,25 +283,34 @@
   <script>
     const el = (id) => document.getElementById(id);
 
-    const hourInput = el("hour");
-    const minuteInput = el("minute");
-    const ampmSelect = el("ampm");
+    const startAtInput = el("startAt");
+    const endAtInput = el("endAt");
+    const setDefaultsBtn = el("setDefaults");
 
     const startBtn = el("start");
     const pauseBtn = el("pause");
     const resetBtn = el("reset");
-    const setToNextHourBtn = el("setToNextHour");
 
     const display = el("display");
     const status = el("status");
     const nowPill = el("nowPill");
-    const targetPill = el("targetPill");
+    const meetingPill = el("meetingPill");
+    const breakPill = el("breakPill");
     const modePill = el("modePill");
+    const warnBox = el("warn");
+
+    const STORAGE_KEY = "meeting-countdown:v1";
 
     let timerId = null;
-    let targetDate = null;
+
+    let meetingStart = null;
+    let meetingEnd = null;
+    let breakStart = null;
+    let breakEnd = null;
+
     let paused = false;
     let remainingWhenPausedMs = null;
+    let pausedMode = null; // "pre" | "meeting"
 
     // --- Helpers ---
     const pad2 = (n) => String(n).padStart(2, "0");
@@ -305,61 +329,95 @@
       display.classList.toggle("flash", flash);
     }
 
-    function to24Hour(hour12, ampm) {
-      let h = hour12 % 12;        // 12 -> 0
-      if (ampm === "PM") h += 12;
-      return h;
-    }
-
-    function sanitizeInputs() {
-      let hh = Number(hourInput.value);
-      let mm = Number(minuteInput.value);
-
-      if (!Number.isFinite(hh)) hh = 12;
-      if (!Number.isFinite(mm)) mm = 0;
-
-      hh = Math.min(12, Math.max(1, Math.trunc(hh)));
-      mm = Math.min(59, Math.max(0, Math.trunc(mm)));
-
-      hourInput.value = hh;
-      minuteInput.value = pad2(mm);
-
-      return { hh, mm, ampm: ampmSelect.value };
-    }
-
-    function computeNextTargetDate() {
-      const { hh, mm, ampm } = sanitizeInputs();
-
-      const now = new Date();
-      const target = new Date(now);
-
-      const hour24 = to24Hour(hh, ampm);
-      target.setHours(hour24, mm, 0, 0);
-
-      // If target is <= now, set to tomorrow
-      if (target.getTime() <= now.getTime()) {
-        target.setDate(target.getDate() + 1);
-      }
-
-      return target;
+    function toLocalDateTimeValue(d) {
+      // datetime-local wants: YYYY-MM-DDTHH:MM (no seconds)
+      const yyyy = d.getFullYear();
+      const mm = pad2(d.getMonth() + 1);
+      const dd = pad2(d.getDate());
+      const hh = pad2(d.getHours());
+      const mi = pad2(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
     }
 
     function prettyTime(d) {
-      // local 12-hour with seconds
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     }
 
-    function prettyTarget(d) {
-      // local with weekday + date + time (short)
+    function prettyDateTime(d) {
       return d.toLocaleString([], {
         weekday: "short",
-        year: "numeric",
         month: "short",
         day: "2-digit",
         hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
+        minute: "2-digit"
       });
+    }
+
+    function showWarn(msg) {
+      warnBox.textContent = msg;
+      warnBox.classList.add("show");
+    }
+    function clearWarn() {
+      warnBox.textContent = "";
+      warnBox.classList.remove("show");
+    }
+
+    function parseInputs() {
+      clearWarn();
+
+      const s = startAtInput.value ? new Date(startAtInput.value) : null;
+      const e = endAtInput.value ? new Date(endAtInput.value) : null;
+
+      if (!s || Number.isNaN(s.getTime())) {
+        showWarn("Start time is missing/invalid.");
+        return null;
+      }
+      if (!e || Number.isNaN(e.getTime())) {
+        showWarn("End time is missing/invalid.");
+        return null;
+      }
+      if (e.getTime() <= s.getTime()) {
+        showWarn("End time must be after start time.");
+        return null;
+      }
+
+      return { s, e };
+    }
+
+    function computeBreakWindow(s, e) {
+      const durationMs = e.getTime() - s.getTime();
+      const halfMs = Math.floor(durationMs / 2);
+      const bStart = new Date(s.getTime() + halfMs);
+      const bEnd = new Date(bStart.getTime() + 5 * 60 * 1000); // 5 minutes
+      return { bStart, bEnd };
+    }
+
+    function saveState() {
+      if (!meetingStart || !meetingEnd) return;
+      const payload = {
+        start: meetingStart.toISOString(),
+        end: meetingEnd.toISOString()
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.start || !parsed?.end) return false;
+
+        const s = new Date(parsed.start);
+        const e = new Date(parsed.end);
+        if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return false;
+
+        startAtInput.value = toLocalDateTimeValue(s);
+        endAtInput.value = toLocalDateTimeValue(e);
+        return true;
+      } catch {
+        return false;
+      }
     }
 
     // --- Live "Now" pill ---
@@ -367,42 +425,124 @@
       nowPill.textContent = "Now: " + prettyTime(new Date());
     }, 250);
 
-    // --- Core countdown loop ---
-    function tick() {
-      if (!targetDate) return;
-
-      const now = new Date();
-      const diff = targetDate.getTime() - now.getTime();
-
-      if (diff <= 0) {
-        setDisplay("00:00:00", true);
-        status.textContent = "Time!";
-        modePill.textContent = "Mode: Finished";
-        stopTimer(false); // don't reset target, just stop ticking
+    function refreshMeta() {
+      if (!meetingStart || !meetingEnd) {
+        meetingPill.textContent = "Meeting: —";
+        breakPill.textContent = "Break: —";
         return;
       }
 
-      setDisplay(formatHMS(diff), false);
-      status.textContent = "Counting down";
-      modePill.textContent = "Mode: Running";
+      meetingPill.textContent = `Meeting: ${prettyDateTime(meetingStart)} → ${prettyDateTime(meetingEnd)}`;
+
+      const b = computeBreakWindow(meetingStart, meetingEnd);
+      breakStart = b.bStart;
+      breakEnd = b.bEnd;
+
+      breakPill.textContent = `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (5m)`;
+    }
+
+    // --- Core loop ---
+    function tick() {
+      if (!meetingStart || !meetingEnd) return;
+
+      const now = new Date();
+
+      // Determine phase
+      const preMeeting = now.getTime() < meetingStart.getTime();
+      const inMeeting = now.getTime() >= meetingStart.getTime() && now.getTime() < meetingEnd.getTime();
+      const finished = now.getTime() >= meetingEnd.getTime();
+
+      // Break window (computed from fixed start/end)
+      const b = computeBreakWindow(meetingStart, meetingEnd);
+      breakStart = b.bStart;
+      breakEnd = b.bEnd;
+
+      // Flash logic: 30s before break starts, or during break
+      const msToBreak = breakStart.getTime() - now.getTime();
+      const inBreak = now.getTime() >= breakStart.getTime() && now.getTime() < breakEnd.getTime();
+      const flash = (msToBreak > 0 && msToBreak <= 30_000) || inBreak;
+
+      if (finished) {
+        setDisplay("00:00:00", true);
+        status.textContent = "Done";
+        modePill.textContent = "Mode: Finished";
+        stopTimer(false);
+        return;
+      }
+
+      if (preMeeting) {
+        const msToStart = meetingStart.getTime() - now.getTime();
+        setDisplay(formatHMS(msToStart), flash);
+        status.textContent = "Until start";
+        modePill.textContent = "Mode: Waiting to start";
+
+        // Break info still useful even before start: show exact time + countdown
+        breakPill.textContent =
+          `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (in ${formatHMS(msToBreak)})`;
+        return;
+      }
+
+      // In meeting
+      const msToEnd = meetingEnd.getTime() - now.getTime();
+      setDisplay(formatHMS(msToEnd), flash);
+      status.textContent = inBreak ? "On break" : "Until end";
+      modePill.textContent = inBreak ? "Mode: Break (5m)" : "Mode: Running";
+
+      if (inBreak) {
+        const msToBreakEnd = breakEnd.getTime() - now.getTime();
+        breakPill.textContent =
+          `Break: NOW (ends in ${formatHMS(msToBreakEnd)})`;
+      } else if (now.getTime() < breakStart.getTime()) {
+        breakPill.textContent =
+          `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (in ${formatHMS(msToBreak)})`;
+      } else {
+        breakPill.textContent =
+          `Break: done (${prettyTime(breakStart)}–${prettyTime(breakEnd)})`;
+      }
     }
 
     function startTimer() {
-      // If paused, resume using remaining time
-      if (paused && remainingWhenPausedMs != null) {
-        targetDate = new Date(Date.now() + remainingWhenPausedMs);
+      // Resume path
+      if (paused && remainingWhenPausedMs != null && pausedMode) {
+        const now = Date.now();
+
+        if (pausedMode === "pre") {
+          meetingStart = new Date(now + remainingWhenPausedMs);
+          // Keep original duration from inputs (or existing)
+          const parsed = parseInputs();
+          const durationMs = parsed
+            ? (parsed.e.getTime() - parsed.s.getTime())
+            : (meetingEnd ? meetingEnd.getTime() - meetingStart.getTime() : 30 * 60 * 1000);
+
+          meetingEnd = new Date(meetingStart.getTime() + durationMs);
+        } else {
+          // paused during meeting => keep meetingStart fixed, push meetingEnd out by remaining
+          meetingEnd = new Date(now + remainingWhenPausedMs);
+          // meetingStart should already exist; if not, fall back to inputs
+          if (!meetingStart) {
+            const parsed = parseInputs();
+            meetingStart = parsed ? parsed.s : new Date(now);
+          }
+        }
+
         paused = false;
         remainingWhenPausedMs = null;
+        pausedMode = null;
       } else {
-        targetDate = computeNextTargetDate();
+        const parsed = parseInputs();
+        if (!parsed) return;
+
+        meetingStart = parsed.s;
+        meetingEnd = parsed.e;
       }
 
-      targetPill.textContent = "Target: " + prettyTarget(targetDate);
-      display.classList.remove("flash");
+      refreshMeta();
+      saveState();
 
+      display.classList.remove("flash");
       stopTimer(false);
       tick();
-      timerId = setInterval(tick, 200); // tight-ish loop; display updates to seconds
+      timerId = setInterval(tick, 200);
     }
 
     function stopTimer(resetModeText=true) {
@@ -414,13 +554,21 @@
     }
 
     function pauseTimer() {
-      if (!timerId || !targetDate) return;
+      if (!timerId || !meetingStart || !meetingEnd) return;
 
-      const diff = targetDate.getTime() - Date.now();
-      remainingWhenPausedMs = Math.max(0, diff);
+      const now = Date.now();
+
+      if (now < meetingStart.getTime()) {
+        remainingWhenPausedMs = meetingStart.getTime() - now;
+        pausedMode = "pre";
+      } else {
+        remainingWhenPausedMs = Math.max(0, meetingEnd.getTime() - now);
+        pausedMode = "meeting";
+      }
+
       paused = true;
-
       stopTimer(false);
+
       status.textContent = "Paused";
       modePill.textContent = "Mode: Paused";
       setDisplay(formatHMS(remainingWhenPausedMs), false);
@@ -428,54 +576,64 @@
 
     function resetAll() {
       stopTimer(true);
-      targetDate = null;
+      meetingStart = null;
+      meetingEnd = null;
+      breakStart = null;
+      breakEnd = null;
+
       paused = false;
       remainingWhenPausedMs = null;
+      pausedMode = null;
 
       display.classList.remove("flash");
       setDisplay("00:00:00", false);
       status.textContent = "Ready";
-      targetPill.textContent = "Target: —";
+      meetingPill.textContent = "Meeting: —";
+      breakPill.textContent = "Break: —";
+      clearWarn();
+    }
+
+    function setDefaultsNowPlus30() {
+      const now = new Date();
+      const end = new Date(now.getTime() + 30 * 60 * 1000);
+      startAtInput.value = toLocalDateTimeValue(now);
+      endAtInput.value = toLocalDateTimeValue(end);
+
+      // If already running or paused, restart cleanly
+      if (timerId || paused) {
+        paused = false;
+        remainingWhenPausedMs = null;
+        pausedMode = null;
+        startTimer();
+      }
     }
 
     // --- UI wiring ---
     startBtn.addEventListener("click", startTimer);
     pauseBtn.addEventListener("click", pauseTimer);
-    resetBtn.addEventListener("click", resetAll);
-
-    setToNextHourBtn.addEventListener("click", () => {
-      const now = new Date();
-      // Next hour, minute 00
-      const next = new Date(now);
-      next.setHours(now.getHours() + 1, 0, 0, 0);
-
-      // Convert to 12h
-      const h24 = next.getHours();
-      const ampm = h24 >= 12 ? "PM" : "AM";
-      const h12 = (h24 % 12) || 12;
-
-      hourInput.value = h12;
-      minuteInput.value = "00";
-      ampmSelect.value = ampm;
-
-      // If running, restart countdown to the new target immediately
-      if (timerId || paused) {
-        paused = false;
-        remainingWhenPausedMs = null;
-        startTimer();
-      }
+    resetBtn.addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      resetAll();
     });
 
+    setDefaultsBtn.addEventListener("click", setDefaultsNowPlus30);
+
     // Make Enter start the timer when editing fields
-    [hourInput, minuteInput, ampmSelect].forEach((node) => {
+    [startAtInput, endAtInput].forEach((node) => {
       node.addEventListener("keydown", (e) => {
         if (e.key === "Enter") startTimer();
       });
     });
 
     // Initialize
-    resetAll();
     nowPill.textContent = "Now: " + prettyTime(new Date());
+
+    // Load previous times if present, otherwise set defaults
+    if (!loadState()) {
+      setDefaultsNowPlus30();
+    }
+    resetAll();
+    // Keep the inputs (loaded/default), but don’t auto-start.
   </script>
 </body>
 </html>
