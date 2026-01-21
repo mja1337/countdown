@@ -9,11 +9,9 @@
       --bg1:#0b1020;
       --bg2:#0f1b3a;
       --card:rgba(255,255,255,.08);
-      --card2:rgba(255,255,255,.12);
       --text:rgba(255,255,255,.92);
       --muted:rgba(255,255,255,.68);
       --accent:#7c5cff;
-      --accent2:#27e8a7;
       --danger:#ff3d71;
       --shadow: 0 18px 50px rgba(0,0,0,.35);
       --radius: 22px;
@@ -38,7 +36,7 @@
     }
 
     .wrap{
-      width:min(980px, 100%);
+      width:min(1040px, 100%);
       display:grid;
       grid-template-columns: 1fr;
       gap:18px;
@@ -125,23 +123,27 @@
       align-items:center;
     }
 
-    input, button{
+    input, button, select{
       font: inherit;
       color: var(--text);
     }
 
-    input{
+    input, select{
       background: rgba(0,0,0,.25);
       border: 1px solid rgba(255,255,255,.16);
       border-radius: 14px;
       padding: 12px 12px;
       outline: none;
-      transition: border .15s ease, transform .15s ease, background .15s ease;
+      transition: border .15s ease, background .15s ease;
       min-width: 260px;
     }
-    input:focus{
+    input:focus, select:focus{
       border-color: rgba(124,92,255,.75);
       background: rgba(0,0,0,.32);
+    }
+
+    input.small, select.small{
+      min-width: 170px;
     }
 
     .btns{
@@ -162,6 +164,7 @@
       transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
       font-weight: 650;
       letter-spacing:.2px;
+      white-space:nowrap;
     }
     button:hover{ transform: translateY(-1px); filter: brightness(1.05); }
     button:active{ transform: translateY(0px); filter: brightness(.98); }
@@ -175,6 +178,11 @@
     button.danger{
       background: linear-gradient(180deg, rgba(255,61,113,.85), rgba(255,61,113,.55));
       box-shadow: 0 10px 22px rgba(255,61,113,.16);
+    }
+
+    button.tiny{
+      padding:10px 12px;
+      font-weight:650;
     }
 
     .meta{
@@ -222,7 +230,7 @@
     }
     .warn.show{ display:block; }
 
-    @media (min-width: 780px){
+    @media (min-width: 900px){
       .field.time { grid-column: span 8; }
       .field.actions { grid-column: span 4; }
       .btns{ justify-content:flex-start; height:100%; align-content:flex-end; }
@@ -237,7 +245,7 @@
         <div>
           <h1>Meeting Countdown</h1>
           <p class="sub">
-            Set a meeting start + end (local time). The page counts down to the end, and suggests a 5-minute break at halfway.
+            Set meeting start + end. Break defaults to halfway, but you can change duration and push the break start.
           </p>
         </div>
         <div class="pill" id="nowPill">Now: --:--:--</div>
@@ -251,7 +259,13 @@
           <div class="row">
             <input id="startAt" type="datetime-local" />
             <input id="endAt" type="datetime-local" />
-            <button class="secondary" id="setDefaults" type="button">Now + 30m</button>
+          </div>
+          <div class="row">
+            <button class="secondary tiny" data-preset="30" type="button">Now + 30m</button>
+            <button class="secondary tiny" data-preset="60" type="button">Now + 1h</button>
+            <button class="secondary tiny" data-preset="120" type="button">Now + 2h</button>
+            <button class="secondary tiny" data-preset="180" type="button">Now + 3h</button>
+            <button class="secondary tiny" data-preset="240" type="button">Now + 4h</button>
           </div>
         </div>
 
@@ -261,6 +275,29 @@
             <button id="start" type="button">Start</button>
             <button class="secondary" id="pause" type="button">Pause</button>
             <button class="danger" id="reset" type="button">Reset</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Break settings</label>
+          <div class="row">
+            <select id="breakMinutes" class="small">
+              <option value="5" selected>Break length: 5 min</option>
+              <option value="10">Break length: 10 min</option>
+              <option value="15">Break length: 15 min</option>
+              <option value="20">Break length: 20 min</option>
+            </select>
+
+            <input id="breakStartExact" class="small" type="time" step="60" placeholder="Break start (HH:MM)" />
+            <button class="secondary tiny" id="applyExactBreak" type="button">Set exact</button>
+
+            <button class="secondary tiny" id="breakNow" type="button">Break now</button>
+            <button class="secondary tiny" id="minus5" type="button">-5m</button>
+            <button class="secondary tiny" id="plus5" type="button">+5m</button>
+            <button class="secondary tiny" id="resetBreak" type="button">Reset break</button>
+          </div>
+          <div class="hint" id="breakHint">
+            Halfway break is computed from start/end. “Set exact” pins break start. +/- buttons push/pull the break start.
           </div>
         </div>
       </div>
@@ -274,8 +311,7 @@
       </div>
 
       <p class="hint">
-        Notes: Break is scheduled at the halfway point (50% of total meeting length) and lasts 5 minutes.
-        If the meeting hasn’t started yet, the big timer counts down to the start. Once started, it counts down to the end.
+        Close protection: while running/paused, closing the tab prompts you. Browsers may ignore custom text.
       </p>
     </section>
   </main>
@@ -285,11 +321,18 @@
 
     const startAtInput = el("startAt");
     const endAtInput = el("endAt");
-    const setDefaultsBtn = el("setDefaults");
 
     const startBtn = el("start");
     const pauseBtn = el("pause");
     const resetBtn = el("reset");
+
+    const breakMinutesSelect = el("breakMinutes");
+    const breakStartExactInput = el("breakStartExact");
+    const applyExactBreakBtn = el("applyExactBreak");
+    const breakNowBtn = el("breakNow");
+    const minus5Btn = el("minus5");
+    const plus5Btn = el("plus5");
+    const resetBreakBtn = el("resetBreak");
 
     const display = el("display");
     const status = el("status");
@@ -298,15 +341,22 @@
     const breakPill = el("breakPill");
     const modePill = el("modePill");
     const warnBox = el("warn");
+    const breakHint = el("breakHint");
 
-    const STORAGE_KEY = "meeting-countdown:v1";
+    const STORAGE_KEY = "meeting-countdown:v2";
 
     let timerId = null;
 
     let meetingStart = null;
     let meetingEnd = null;
-    let breakStart = null;
-    let breakEnd = null;
+
+    // Break controls:
+    // - breakDurationMinutes: length of break
+    // - breakOffsetMinutes: offset applied to the default halfway break start
+    // - breakPinnedStartMs: if set, break start is pinned to an absolute timestamp (ms)
+    let breakDurationMinutes = 5;
+    let breakOffsetMinutes = 0;
+    let breakPinnedStartMs = null;
 
     let paused = false;
     let remainingWhenPausedMs = null;
@@ -324,13 +374,11 @@
     }
 
     function setDisplay(text, flash=false) {
-      // Keep the "small" status node stable by rewriting only the text nodes:
       display.childNodes[0].nodeValue = text + " ";
       display.classList.toggle("flash", flash);
     }
 
     function toLocalDateTimeValue(d) {
-      // datetime-local wants: YYYY-MM-DDTHH:MM (no seconds)
       const yyyy = d.getFullYear();
       const mm = pad2(d.getMonth() + 1);
       const dd = pad2(d.getDate());
@@ -380,23 +428,34 @@
         showWarn("End time must be after start time.");
         return null;
       }
-
       return { s, e };
     }
 
-    function computeBreakWindow(s, e) {
+    function defaultHalfBreakStartMs(s, e) {
       const durationMs = e.getTime() - s.getTime();
-      const halfMs = Math.floor(durationMs / 2);
-      const bStart = new Date(s.getTime() + halfMs);
-      const bEnd = new Date(bStart.getTime() + 5 * 60 * 1000); // 5 minutes
-      return { bStart, bEnd };
+      return s.getTime() + Math.floor(durationMs / 2);
+    }
+
+    function computeBreakWindow(s, e) {
+      const baseStartMs = defaultHalfBreakStartMs(s, e);
+
+      const startMs =
+        (breakPinnedStartMs != null ? breakPinnedStartMs : baseStartMs) +
+        (breakPinnedStartMs != null ? 0 : breakOffsetMinutes * 60_000);
+
+      const bStart = new Date(startMs);
+      const bEnd = new Date(startMs + breakDurationMinutes * 60_000);
+      return { bStart, bEnd, baseStartMs };
     }
 
     function saveState() {
       if (!meetingStart || !meetingEnd) return;
       const payload = {
         start: meetingStart.toISOString(),
-        end: meetingEnd.toISOString()
+        end: meetingEnd.toISOString(),
+        breakDurationMinutes,
+        breakOffsetMinutes,
+        breakPinnedStartMs
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     }
@@ -414,16 +473,51 @@
 
         startAtInput.value = toLocalDateTimeValue(s);
         endAtInput.value = toLocalDateTimeValue(e);
+
+        breakDurationMinutes = Number(parsed.breakDurationMinutes ?? 5);
+        breakOffsetMinutes = Number(parsed.breakOffsetMinutes ?? 0);
+        breakPinnedStartMs =
+          (parsed.breakPinnedStartMs === null || parsed.breakPinnedStartMs === undefined)
+            ? null
+            : Number(parsed.breakPinnedStartMs);
+
+        breakMinutesSelect.value = String(breakDurationMinutes);
+        updateBreakHint();
+
         return true;
       } catch {
         return false;
       }
     }
 
+    function isActive() {
+      // treat paused as "active" for close protection
+      return Boolean(timerId) || paused;
+    }
+
+    // Close protection
+    window.addEventListener("beforeunload", (e) => {
+      if (!isActive()) return;
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    });
+
     // --- Live "Now" pill ---
     setInterval(() => {
       nowPill.textContent = "Now: " + prettyTime(new Date());
     }, 250);
+
+    function updateBreakHint() {
+      if (breakPinnedStartMs != null) {
+        breakHint.textContent = `Break is pinned to an exact start time. Reset break to return to halfway. Break length: ${breakDurationMinutes} min.`;
+      } else if (breakOffsetMinutes !== 0) {
+        const dir = breakOffsetMinutes > 0 ? "later" : "earlier";
+        breakHint.textContent = `Break is halfway, shifted ${Math.abs(breakOffsetMinutes)} min ${dir}. Break length: ${breakDurationMinutes} min.`;
+      } else {
+        breakHint.textContent = `Break is halfway. Break length: ${breakDurationMinutes} min.`;
+      }
+    }
 
     function refreshMeta() {
       if (!meetingStart || !meetingEnd) {
@@ -434,11 +528,10 @@
 
       meetingPill.textContent = `Meeting: ${prettyDateTime(meetingStart)} → ${prettyDateTime(meetingEnd)}`;
 
-      const b = computeBreakWindow(meetingStart, meetingEnd);
-      breakStart = b.bStart;
-      breakEnd = b.bEnd;
+      const { bStart, bEnd } = computeBreakWindow(meetingStart, meetingEnd);
+      breakPill.textContent = `Break: ${prettyTime(bStart)}–${prettyTime(bEnd)} (${breakDurationMinutes}m)`;
 
-      breakPill.textContent = `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (5m)`;
+      updateBreakHint();
     }
 
     // --- Core loop ---
@@ -447,19 +540,13 @@
 
       const now = new Date();
 
-      // Determine phase
       const preMeeting = now.getTime() < meetingStart.getTime();
-      const inMeeting = now.getTime() >= meetingStart.getTime() && now.getTime() < meetingEnd.getTime();
       const finished = now.getTime() >= meetingEnd.getTime();
 
-      // Break window (computed from fixed start/end)
-      const b = computeBreakWindow(meetingStart, meetingEnd);
-      breakStart = b.bStart;
-      breakEnd = b.bEnd;
+      const { bStart, bEnd } = computeBreakWindow(meetingStart, meetingEnd);
+      const msToBreak = bStart.getTime() - now.getTime();
+      const inBreak = now.getTime() >= bStart.getTime() && now.getTime() < bEnd.getTime();
 
-      // Flash logic: 30s before break starts, or during break
-      const msToBreak = breakStart.getTime() - now.getTime();
-      const inBreak = now.getTime() >= breakStart.getTime() && now.getTime() < breakEnd.getTime();
       const flash = (msToBreak > 0 && msToBreak <= 30_000) || inBreak;
 
       if (finished) {
@@ -476,28 +563,23 @@
         status.textContent = "Until start";
         modePill.textContent = "Mode: Waiting to start";
 
-        // Break info still useful even before start: show exact time + countdown
         breakPill.textContent =
-          `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (in ${formatHMS(msToBreak)})`;
+          `Break: ${prettyTime(bStart)}–${prettyTime(bEnd)} (in ${formatHMS(msToBreak)})`;
         return;
       }
 
-      // In meeting
       const msToEnd = meetingEnd.getTime() - now.getTime();
       setDisplay(formatHMS(msToEnd), flash);
       status.textContent = inBreak ? "On break" : "Until end";
-      modePill.textContent = inBreak ? "Mode: Break (5m)" : "Mode: Running";
+      modePill.textContent = inBreak ? `Mode: Break (${breakDurationMinutes}m)` : "Mode: Running";
 
       if (inBreak) {
-        const msToBreakEnd = breakEnd.getTime() - now.getTime();
-        breakPill.textContent =
-          `Break: NOW (ends in ${formatHMS(msToBreakEnd)})`;
-      } else if (now.getTime() < breakStart.getTime()) {
-        breakPill.textContent =
-          `Break: ${prettyTime(breakStart)}–${prettyTime(breakEnd)} (in ${formatHMS(msToBreak)})`;
+        const msToBreakEnd = bEnd.getTime() - now.getTime();
+        breakPill.textContent = `Break: NOW (ends in ${formatHMS(msToBreakEnd)})`;
+      } else if (now.getTime() < bStart.getTime()) {
+        breakPill.textContent = `Break: ${prettyTime(bStart)}–${prettyTime(bEnd)} (in ${formatHMS(msToBreak)})`;
       } else {
-        breakPill.textContent =
-          `Break: done (${prettyTime(breakStart)}–${prettyTime(breakEnd)})`;
+        breakPill.textContent = `Break: done (${prettyTime(bStart)}–${prettyTime(bEnd)})`;
       }
     }
 
@@ -507,18 +589,15 @@
         const now = Date.now();
 
         if (pausedMode === "pre") {
-          meetingStart = new Date(now + remainingWhenPausedMs);
-          // Keep original duration from inputs (or existing)
           const parsed = parseInputs();
           const durationMs = parsed
             ? (parsed.e.getTime() - parsed.s.getTime())
-            : (meetingEnd ? meetingEnd.getTime() - meetingStart.getTime() : 30 * 60 * 1000);
+            : (meetingEnd && meetingStart ? (meetingEnd.getTime() - meetingStart.getTime()) : 30 * 60 * 1000);
 
+          meetingStart = new Date(now + remainingWhenPausedMs);
           meetingEnd = new Date(meetingStart.getTime() + durationMs);
         } else {
-          // paused during meeting => keep meetingStart fixed, push meetingEnd out by remaining
           meetingEnd = new Date(now + remainingWhenPausedMs);
-          // meetingStart should already exist; if not, fall back to inputs
           if (!meetingStart) {
             const parsed = parseInputs();
             meetingStart = parsed ? parsed.s : new Date(now);
@@ -572,14 +651,13 @@
       status.textContent = "Paused";
       modePill.textContent = "Mode: Paused";
       setDisplay(formatHMS(remainingWhenPausedMs), false);
+      saveState();
     }
 
     function resetAll() {
       stopTimer(true);
       meetingStart = null;
       meetingEnd = null;
-      breakStart = null;
-      breakEnd = null;
 
       paused = false;
       remainingWhenPausedMs = null;
@@ -593,19 +671,113 @@
       clearWarn();
     }
 
-    function setDefaultsNowPlus30() {
+    function setPresetNowPlus(minutes) {
       const now = new Date();
-      const end = new Date(now.getTime() + 30 * 60 * 1000);
+      const end = new Date(now.getTime() + minutes * 60 * 1000);
       startAtInput.value = toLocalDateTimeValue(now);
       endAtInput.value = toLocalDateTimeValue(end);
 
-      // If already running or paused, restart cleanly
+      // New meeting => reset break overrides (sane default)
+      breakPinnedStartMs = null;
+      breakOffsetMinutes = 0;
+      updateBreakHint();
+
+      // If running/paused, restart cleanly
       if (timerId || paused) {
         paused = false;
         remainingWhenPausedMs = null;
         pausedMode = null;
         startTimer();
+      } else {
+        // Not running: just refresh the pills
+        const parsed = parseInputs();
+        if (parsed) {
+          meetingStart = parsed.s;
+          meetingEnd = parsed.e;
+          refreshMeta();
+          meetingStart = null;
+          meetingEnd = null;
+        }
       }
+      saveState();
+    }
+
+    function applyBreakDurationFromUI() {
+      const v = Number(breakMinutesSelect.value);
+      breakDurationMinutes = Number.isFinite(v) && v > 0 ? v : 5;
+      updateBreakHint();
+      refreshMeta();
+      saveState();
+      tick();
+    }
+
+    function nudgeBreak(minutes) {
+      // nudging a pinned break moves the pin too (explicit "push it out")
+      if (breakPinnedStartMs != null) {
+        breakPinnedStartMs += minutes * 60_000;
+      } else {
+        breakOffsetMinutes += minutes;
+      }
+      updateBreakHint();
+      refreshMeta();
+      saveState();
+      tick();
+    }
+
+    function setExactBreakFromUI() {
+      const parsed = parseInputs();
+      if (!parsed) return;
+
+      const timeVal = breakStartExactInput.value; // "HH:MM"
+      if (!timeVal || !/^\d{2}:\d{2}$/.test(timeVal)) {
+        showWarn("Enter break time as HH:MM (24h).");
+        return;
+      }
+      clearWarn();
+
+      const [hh, mm] = timeVal.split(":").map(Number);
+      const d = new Date(parsed.s);
+      d.setHours(hh, mm, 0, 0);
+
+      // Clamp into meeting window
+      if (d.getTime() < parsed.s.getTime()) d.setTime(parsed.s.getTime());
+      if (d.getTime() >= parsed.e.getTime()) d.setTime(parsed.e.getTime() - 60_000);
+
+      breakPinnedStartMs = d.getTime();
+      breakOffsetMinutes = 0;
+
+      updateBreakHint();
+      refreshMeta();
+      saveState();
+      tick();
+    }
+
+    function breakNow() {
+      const parsed = parseInputs();
+      if (!parsed) return;
+
+      let t = Date.now();
+
+      // Clamp into meeting window
+      if (t < parsed.s.getTime()) t = parsed.s.getTime();
+      if (t >= parsed.e.getTime()) t = parsed.e.getTime() - 60_000;
+
+      breakPinnedStartMs = t;
+      breakOffsetMinutes = 0;
+
+      updateBreakHint();
+      refreshMeta();
+      saveState();
+      tick();
+    }
+
+    function resetBreakOverrides() {
+      breakPinnedStartMs = null;
+      breakOffsetMinutes = 0;
+      updateBreakHint();
+      refreshMeta();
+      saveState();
+      tick();
     }
 
     // --- UI wiring ---
@@ -614,9 +786,28 @@
     resetBtn.addEventListener("click", () => {
       localStorage.removeItem(STORAGE_KEY);
       resetAll();
+      // reset break controls too
+      breakDurationMinutes = 5;
+      breakOffsetMinutes = 0;
+      breakPinnedStartMs = null;
+      breakMinutesSelect.value = "5";
+      breakStartExactInput.value = "";
+      updateBreakHint();
     });
 
-    setDefaultsBtn.addEventListener("click", setDefaultsNowPlus30);
+    document.querySelectorAll("button[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mins = Number(btn.getAttribute("data-preset"));
+        setPresetNowPlus(mins);
+      });
+    });
+
+    breakMinutesSelect.addEventListener("change", applyBreakDurationFromUI);
+    applyExactBreakBtn.addEventListener("click", setExactBreakFromUI);
+    breakNowBtn.addEventListener("click", breakNow);
+    minus5Btn.addEventListener("click", () => nudgeBreak(-5));
+    plus5Btn.addEventListener("click", () => nudgeBreak(+5));
+    resetBreakBtn.addEventListener("click", resetBreakOverrides);
 
     // Make Enter start the timer when editing fields
     [startAtInput, endAtInput].forEach((node) => {
@@ -628,12 +819,36 @@
     // Initialize
     nowPill.textContent = "Now: " + prettyTime(new Date());
 
-    // Load previous times if present, otherwise set defaults
+    // Load previous times if present, otherwise set a sane default (Now + 30m)
     if (!loadState()) {
-      setDefaultsNowPlus30();
+      setPresetNowPlus(30);
     }
-    resetAll();
-    // Keep the inputs (loaded/default), but don’t auto-start.
+
+    // Show pills based on inputs without auto-start
+    (function primePills() {
+      const parsed = parseInputs();
+      if (!parsed) return;
+      meetingStart = parsed.s;
+      meetingEnd = parsed.e;
+      refreshMeta();
+      meetingStart = null;
+      meetingEnd = null;
+      clearWarn();
+    })();
+
+    // Keep pills updated when user edits times (but don't start)
+    [startAtInput, endAtInput].forEach((node) => {
+      node.addEventListener("change", () => {
+        const parsed = parseInputs();
+        if (!parsed) return;
+        meetingStart = parsed.s;
+        meetingEnd = parsed.e;
+        refreshMeta();
+        meetingStart = null;
+        meetingEnd = null;
+        saveState();
+      });
+    });
   </script>
 </body>
 </html>
